@@ -17,8 +17,12 @@
 package org.springframework.boot.buildpack.platform.docker.type;
 
 import java.io.File;
+import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -304,6 +308,36 @@ class ImageReferenceTests {
 		ImageReference reference = ImageReference.of("docker.io/library/ubuntu:bionic");
 		ImageReference updated = reference.inTaglessForm();
 		assertThat(updated).hasToString("docker.io/library/ubuntu");
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			// Long library names fail
+			"docker.io/research-projects-library/my-service:1.0.0+1234",
+			"docker.io/this-is-going-to-fail-because-long-library-name/my-service:1.0.0+1234",
+			// Also, long project names
+			"docker.io/library/this-is-going-to-fail-because-name-is-long:1.0.0+1234",
+			// Length of hostname doesn't impact
+			"long-hostname-doesnt-break-the-image-reference.io/library/my-service:1.0.0+1234",
+			// Short library names don't fail
+			"docker.io/short-library-name/my-service:1.0.0+1234",
+			"docker.io/library/my-service:1.0.0+1234",
+			// Without Build Identifier "+<build-id>" doenst fail
+			"docker.io/long-but-it-doesnt-have-build-identifier-so-it-will-work/my-service:1.0.0",
+			"docker.io/library/long-but-it-doesnt-have-build-identifier-so-it-will-work:1.0.0",
+	})
+	void doesntFreeze(String uri) {
+		Awaitility.await()
+				.timeout(Duration.ofSeconds(2))
+				.until(() -> {
+					try {
+						ImageReference.of(uri);
+					}
+					catch (IllegalArgumentException e) {
+						// Ignore IllegalArgumentException caused by wrong URI
+					}
+					return true;
+				});
 	}
 
 }
